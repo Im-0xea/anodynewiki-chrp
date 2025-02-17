@@ -32,53 +32,55 @@ def delete_cache_files(directory, reference_checksum)
   end
 end
 
-handle_args()
-if $options[:m] == "search"
+def uncache(cache, file)
+  chksm = calculate_checksum("structure/" + file.downcase)
+  if chksm != nil
+    delete_cache_files(cache, chksm)
+  end
+end
+
+def search(ssub)
+  search = ssub["Title"]
+  log = "generating #{ssub["Title"]}"
+  abr = ""
+  if ssub["Abr"] != nil
+    log += " (#{ssub["Abr"]})"
+    abr = ssub["Abr"]
+  end
+  if ssub["Search"] != nil
+    search = ssub["Search"]
+  end
+  if ssub["CID"] != nil
+    search = "CID#{ssub["Search"]}"
+  end
+  puts log
+  query(search, ssub["Title"], abr)
+end
+
+def isearch(single)
   list_content = File.read('index/substance.json')
   listi = nil
   if list_content != nil
     listi = JSON.parse(list_content)["Entries"]
   end
-  if ARGV.empty?
+  if $options[:v]
     puts "list: #{listi.length}"
-    for comp in listi
-      if comp["Title"] != nil
-        search = comp["Title"]
-        log = "generating #{comp["Title"]}"
-        abr = ""
-        if comp["Abr"] != nil
-          log += " (#{comp["Abr"]})"
-          abr = comp["Abr"]
-        end
-        if comp["Search"] != nil
-          search = comp["Search"]
-        end
-        if comp["CID"] != nil
-          search = "CID#{comp["Search"]}"
-        end
-        puts log
-        query(search, comp["Title"], abr)
-      end
+  end
+  for comp in listi
+    if comp["Title"] != nil && (single == nil || comp["Title"] == single)
+      search(comp)
     end
+  end
+end
+
+handle_args()
+if $options[:m] == "search"
+  if ARGV.empty?
+    isearch()
   else
-    for comp in listi
-      if comp["Title"] != nil && comp["Title"] == $compounds[0]
-        search = comp["Title"]
-        log = "generating #{comp["Title"]}"
-        abr = ""
-        if comp["Abr"] != nil
-          log += " (#{comp["Abr"]})"
-          abr = comp["Abr"]
-        end
-        if comp["Search"] != nil
-          search = comp["Search"]
-        end
-        puts log
-        query(search, comp["Title"], abr)
-        exit 0
-      end
-    end
-    query($compounds[0], $compounds[0], "")
+    isearch($compounds[0])
+    exit 0
+    #query($compounds[0], $compounds[0], "")
   end
 elsif $options[:m] == "index"
   list_content = File.read('classes.json')
@@ -115,12 +117,21 @@ elsif $options[:m] == "uncache"
       puts "No substances to uncache defined"
       exit 1
     end
-    
-    chksm = calculate_checksum("structure/" + ARGV[0].downcase + ".svg")
-    if chksm != nil
-      delete_cache_files($options[:c], chksm)
+
+    for arg in ARGV
+      uncache($options[:c], arg + ".svg")
     end
   end
+elsif $options[:m] == "research"
+    if ARGV.empty?
+      puts "No substances to uncache defined"
+      exit 1
+    end
+
+    for arg in ARGV
+      uncache($options[:c], arg + ".svg")
+      isearch(arg)
+    end
 else
   puts "Unknown mode: #{$options[:m]}"
   exit 1
