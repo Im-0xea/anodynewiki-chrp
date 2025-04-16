@@ -23,6 +23,7 @@ DRUG_CLASSES = [
   "opioid",
   "stimulant",
   "depressant",
+  "benzodiazepine"
 ]
 
 PHARM = [
@@ -51,20 +52,10 @@ def query(compound, title, abr)
 
   classStrs = []
   record["DrugClasses"] = []
-  for phrm in PHARM
-    if record[phrm] != nil
-      classStrs += [ record[phrm] ]
-    end
-  end
-
-  if classStrs.length != 0
-    for desc in classStrs
-      matches = DRUG_CLASSES.select { |drug_class| desc.downcase.include?(drug_class.downcase) }
-      if matches.any?
-        record["DrugClasses"] += matches
-      end
-    end
-    record["DrugClasses"] = record["DrugClasses"].uniq
+  if record["Drug Classes"]
+    desc = record["Drug Classes"]
+    matches = DRUG_CLASSES.select { |drug_class| desc.downcase.include?(drug_class.downcase) }
+    record["DrugClasses"] = matches.uniq if matches.any?
   end
 
   generate_structure(record)

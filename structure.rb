@@ -54,7 +54,10 @@ def generate_structure(record)
     mpc += " -o \"#{cff}\""
     mpc += " -j \"#{cffj}\""
   else
-    mpc += " -o \"structure/#{$title.snakecase}.svg\""
+    def to_snake_case(str)
+      str.strip.downcase.gsub(/\s+/, '_').gsub(/[^a-z0-9_]/, '')
+    end    
+    mpc += " -o \"structure/#{to_snake_case($title)}.svg\""
     mpc += " -j \"#{vars_file}\""
   end
   ret = system(mpc)

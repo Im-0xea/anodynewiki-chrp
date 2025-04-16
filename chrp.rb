@@ -51,7 +51,7 @@ def search(ssub)
     search = ssub["Search"]
   end
   if ssub["CID"] != nil
-    search = "CID#{ssub["Search"]}"
+    search = "#{ssub["CID"]}"
   end
   puts log
   query(search, ssub["Title"], abr)

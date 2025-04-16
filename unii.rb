@@ -68,7 +68,7 @@ def query_unii(prev_record)
   end
 
   url = UNII_API + record["UNII"] + UNII_API_END
-  json_props = JSON.parse(fetch(url, "application/json"))
+  json_props = JSON.parse(fetch(url, "application/json").body)
   json_struct = json_props["structure"] # molfile, stereochemistry, opticalActivity
   if json_struct['stereochemistry'] != nil
     record["Chirality"] = json_struct['stereochemistry'].downcase

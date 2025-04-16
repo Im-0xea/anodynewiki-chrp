@@ -13,7 +13,7 @@ def query_chemspider(prev_record)
   end
 
   url = CHEMSPIDER_API + $compound
-  json_props = JSON.parse(fetch(url, "application/json"))
+  json_props = JSON.parse(fetch(url, "application/json").body)
   json_rec = json_props["Records"][0]
   if json_rec == nil
     return record

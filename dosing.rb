@@ -9,7 +9,7 @@ def query_dosing(prev_record)
 
   url = SHARVARA + $title
   json_content = fetch(url, "application/json")
-  json_props = JSON.parse(json_content)
+  json_props = JSON.parse(json_content.body)
 
   record["Dosing Info"] = []
   for dose_range in json_props

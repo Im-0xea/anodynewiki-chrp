@@ -178,7 +178,7 @@ def query_pubchem(prev_record)
     puts "failed to query: #{$compound}"
     return record
   end
-  json_props = JSON.parse(json_content)
+  json_props = JSON.parse(json_content.body)
   properties = json_props["PropertyTable"]["Properties"][0]
   for prop in REST_PROPS
     record[prop] = properties[prop]
@@ -187,14 +187,14 @@ def query_pubchem(prev_record)
   record["Title"] = $title
 
   url = PUG_VIEW + "/data/compound/#{record['PubChemId']}/JSON"
-  json_syms = JSON.parse(fetch(url, "application/json"))
+  json_syms = JSON.parse(fetch(url, "application/json").body)
   sections = json_syms["Record"]["Section"]
   sections.each do |section|
     recurse_section(record, section)
   end
 
   url = PUG_REST + "/compound/cid/#{record['PubChemId']}/description/JSON"
-  json_syms = JSON.parse(fetch(url, "application/json"))
+  json_syms = JSON.parse(fetch(url, "application/json").body)
   infos = json_syms["InformationList"]["Information"]
   #if record["Record Description"] != nil
   #  record["Record Description"] = [ record["Record Description"] ]
@@ -260,7 +260,7 @@ def query_pubchem(prev_record)
   url = PUG_REST + "/compound/cid/#{record["PubChemId"]}/synonyms/JSON"
   json_fetch = fetch(url, "application/json")
   if json_fetch != nil && json_fetch.length != 0
-    json_syms = JSON.parse(json_fetch)
+    json_syms = JSON.parse(json_fetch.body)
     synonyms = json_syms["InformationList"]["Information"][0]["Synonym"].uniq
     filtSynonyms = synonyms - [ record["Title"], record["Title"].upcase, record["Title"].downcase, "(+/-)-#{record["Title"].capitalize()}", "dl-#{record["Title"].capitalize()}", "dl-#{record["Title"]}", record["CAS"], record["IUPACName"], record["UNII"], record["DSSTox Substance ID"], record["Wikidata"] ] # record["ChemicalClasses"][0]
     filtSynonyms = filtSynonyms.reject { |str| str.start_with?("SCHEMBL") }
