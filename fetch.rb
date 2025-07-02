@@ -6,7 +6,7 @@ require "erb"
 
 require_relative 'config'
 
-def fetch(url, accept)
+def fetch(url, accept, static = nil)
   if $options[:v]
     puts "Fetch: " + url
   end
@@ -19,7 +19,7 @@ def fetch(url, accept)
     return response
   end
 
-  cff = $options[:c] + "/" + Digest::MD5.hexdigest(url)
+  cff = $options[:c] + "/" + Digest::MD5.hexdigest(static != nil ? static : url)
   if File.exist?(cff) && File.size(cff) > 0 && ((Time.now - File.mtime(cff)) / (24 * 60 * 60)) < 5.0
     if $options[:v]
       puts "Load Cache: " + url

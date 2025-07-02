@@ -14,35 +14,34 @@ def calculate_checksum(file_path)
   Digest::SHA256.file(file_path).hexdigest
 end
 
-def delete_cache_files(directory, reference_checksum)
+def delete_cache_files(directory, reference_checksum, name)
   Dir.glob(File.join(directory, "*")).each do |file|
     file_checksum = calculate_checksum(file)
     if file_checksum == reference_checksum
-      jsonfile = nil
-      if file.end_with?(".svg")
-        jsonfile = file.sub(/\.svg\z/, "") + ".json"
-      end
+      puts "Uncaching (File): #{name}.svg"
       File.delete(file)
-      puts "deleted cached file #{file}"
-      if jsonfile != nil && File.exist?(jsonfile)
-        File.delete(jsonfile)
-        puts "deleted cached file #{jsonfile}"
+      file = file.delete_suffix(".svg") + ".json"
+      if File.exist?(file)
+        puts "Uncaching (File): #{name}.json"
+        File.delete(file)
       end
     end
   end
 end
 
 def uncache(cache, file)
-  chksm = calculate_checksum("structure/" + file.downcase)
+  chksm = calculate_checksum("structure/#{file}.svg")
   if chksm != nil
-    delete_cache_files(cache, chksm)
+    delete_cache_files(cache, chksm, file)
   end
 end
 
 def search(ssub)
   search = ssub["Title"]
-  log = "generating #{ssub["Title"]}"
+  log = "Searching: #{ssub["Title"]}"
   abr = ""
+  unii = ""
+  classes = nil
   if ssub["Abr"] != nil
     log += " (#{ssub["Abr"]})"
     abr = ssub["Abr"]
@@ -50,11 +49,53 @@ def search(ssub)
   if ssub["Search"] != nil
     search = ssub["Search"]
   end
+  if ssub["Classes"] != nil
+    classes = ssub["Classes"]
+  end
   if ssub["CID"] != nil
     search = "CID#{ssub["Search"]}"
   end
+  if ssub["UNII"] != nil
+    unii = ssub["UNII"]
+  end
   puts log
-  query(search, ssub["Title"], abr)
+  query(search, ssub["Title"], abr, unii, classes)
+end
+
+def iuncache(cache, single)
+  list_content = File.read('index/substance.json')
+  listi = nil
+  if list_content != nil
+    listi = JSON.parse(list_content)["Entries"]
+  end
+  for comp in listi
+    if (comp["Title"] != nil && (single == "" || comp["Title"].downcase == single.downcase)) || (comp["Abr"] != nil && (single == "" || comp["Abr"].downcase == single.downcase))
+      puts "Uncaching (Substance): #{comp["Title"]}" + (comp["Abr"] != nil ? " (#{comp["Abr"]})" : "")
+      uncache(cache, comp["Title"].downcase)
+      vars_file = "substance/#{comp["Title"].downcase.gsub(/\s+/, '_')}/vars.json"
+      mods_file = "substance/#{comp["Title"].downcase.gsub(/\s+/, '_')}/mods.json"
+      if File.exist?(vars_file)
+        json_content = JSON.parse(File.read(vars_file))
+        if json_content != nil
+          if json_content["Salts"] != nil
+            for salt in json_content["Salts"]
+              if salt == "sodium"
+                uncache(cache, "#{salt}_#{comp["Title"].downcase}")
+              else
+                uncache(cache, "#{comp["Title"].downcase}_#{salt}")
+              end
+            end
+          end
+          if json_content["Esters"] != nil
+            for ester in json_content["Esters"]
+              uncache(cache, "#{comp["Title"].downcase}_#{ester}")
+            end
+          end
+        end
+      end
+      puts ""
+    end
+  end
 end
 
 def isearch(single)
@@ -67,7 +108,7 @@ def isearch(single)
     puts "list: #{listi.length}"
   end
   for comp in listi
-    if comp["Title"] != nil && (single == nil || comp["Title"] == single)
+    if (comp["NoBuild"] != true && comp["Title"] != nil && (single == "" || comp["Title"].downcase == single.downcase)) || (comp["NoBuild"] != true && comp["Abr"] != nil && (single == "" || comp["Abr"].downcase == single.downcase))
       search(comp)
     end
   end
@@ -76,7 +117,7 @@ end
 handle_args()
 if $options[:m] == "search"
   if ARGV.empty?
-    isearch()
+    isearch("")
   else
     isearch($compounds[0])
     exit 0
@@ -106,7 +147,7 @@ elsif $options[:m] == "index"
         end
       end
     end
-    index_drug_class(mpath, mclass, $to_index[0])
+    index_class(mpath, mclass, $to_index[0])
   end
 elsif $options[:m] == "init"
   generate_icon_css()
@@ -119,7 +160,7 @@ elsif $options[:m] == "uncache"
     end
 
     for arg in ARGV
-      uncache($options[:c], arg + ".svg")
+      iuncache($options[:c], arg.downcase)
     end
   end
 elsif $options[:m] == "research"
@@ -129,7 +170,7 @@ elsif $options[:m] == "research"
     end
 
     for arg in ARGV
-      uncache($options[:c], arg + ".svg")
+      iuncache($options[:c], arg.downcase)
       isearch(arg)
     end
 else

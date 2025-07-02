@@ -1,6 +1,9 @@
-def index_drug_class(pclass, vclass, iclass)
+def index_class(pclass, vclass, iclass)
   index_substances = []
   index = {} 
+  iclass = iclass.downcase
+  mods_data = {}
+  vars_data = {}
   if File.exist?("#{pclass}/#{iclass.downcase}.json")
     index_file_content = File.read("#{pclass}/#{iclass.downcase}.json")
     index = JSON.parse(index_file_content)
@@ -39,47 +42,71 @@ def index_drug_class(pclass, vclass, iclass)
         end
       end
 
-      if mods_data != nil && mods_data.key?(vclass) && mods_data[vclass].is_a?(Array)
-        if mods_data['IsClass'] != true
-          if mods_data[vclass].include?(iclass)
+      if mods_data != nil && mods_data.key?('ChemicalClasses') && mods_data['ChemicalClasses'].include?(iclass.downcase)
+        if mods_data['IsClass'] != true && mods_data[vclass].include?(iclass)
             index_substances << { "Title": title, "MW": mw }
-          end
-        else
-          if mods_data['ChemicalClasses'] && mods_data['ChemicalClasses'][0].downcase == iclass.downcase
-            if index['First'].is_a?(String)
-              fstr = index['First']
-              index['First'] = {}
-              index['First']['Title'] = fstr
-            end
-            if title != nil
-              index['First']['Title'] = title
-            end
-            if abr != nil
-              index['First']['Abr'] = abr
-            end
-            if mw != nil
-              index['First']['MW'] = mw
-            end
-            for par in mods_data['ChemicalClasses'].drop(1)
-              par_file_content = File.read("#{pclass}/#{par}.json")
-              par_data = JSON.parse(par_file_content)
-              if par_data['Children']
-                if !par_data['Children'].include?(iclass.downcase)
-                  par_data['Children'] += [ iclass.downcase ]
-                end
-              else
-                par_data['Children'] = [ iclass.downcase ]
-              end
-              File.write("#{pclass}/#{par}.json", JSON.pretty_generate(par_data))
-            end
-          end
+            return nil
         end
-      elsif vars_data != nil && vars_data.key?(vclass) && vars_data[vclass].is_a?(Array)
-        if vars_data[vclass].include?(iclass)
-          sub = { "Title": title, "Abr": abr, "MW": mw }
-          index_substances << sub
+        if index['First'].is_a?(String)
+          fstr = index['First']
+          index['First'] = {}
+          index['First']['Title'] = fstr
+        end
+        if title != nil
+          index['First']['Title'] = title
+        end
+        if abr != nil
+          index['First']['Abr'] = abr
+        end
+        if mw != nil
+          index['First']['MW'] = mw
+        end
+        for par in mods_data['ChemicalClasses'].drop(1)
+          par_file_content = File.read("#{pclass}/#{par}.json")
+          par_data = JSON.parse(par_file_content)
+          if par_data['Children']
+            if !par_data['Children'].include?(iclass.downcase)
+              par_data['Children'] += [ iclass.downcase ]
+            end
+          else
+            par_data['Children'] = [ iclass.downcase ]
+          end
+          File.write("#{pclass}/#{par}.json", JSON.pretty_generate(par_data))
         end
       end
+      if vars_data != nil && vars_data['ChemicalClasses'] && vars_data['ChemicalClasses'].include?(iclass.downcase)
+        if vars_data['IsClass'] != true && mods_data[vclass].include?(iclass)
+          index_substances << { "Title": title, "MW": mw }
+          return nil
+        end
+        if index['First'].is_a?(String)
+          fstr = index['First']
+          index['First'] = {}
+          index['First']['Title'] = fstr
+        end
+        if title != nil
+          index['First']['Title'] = title
+        end
+        if abr != nil
+          index['First']['Abr'] = abr
+        end
+        if mw != nil
+          index['First']['MW'] = mw
+        end
+        for par in mods_data['ChemicalClasses'].drop(1)
+          par_file_content = File.read("#{pclass}/#{par}.json")
+          par_data = JSON.parse(par_file_content)
+          if par_data['Children']
+            if !par_data['Children'].include?(iclass.downcase)
+              par_data['Children'] += [ iclass.downcase ]
+            end
+          else
+            par_data['Children'] = [ iclass.downcase ]
+          end
+          File.write("#{pclass}/#{par}.json", JSON.pretty_generate(par_data))
+        end
+      end
+
     rescue => e
       puts "An error occurred with file #{file_path}: #{e.message}"
     end
