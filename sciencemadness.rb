@@ -1,6 +1,7 @@
 SCIENCEMADNESS_URL = 'https://www.sciencemadness.org/smwiki/index.php?action=raw&title='
 
 def query_sciencemadness(prev_record)
+  return prev_record
   if prev_record == nil
     record = {}
   else

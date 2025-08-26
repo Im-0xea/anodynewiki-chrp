@@ -36,5 +36,5 @@ def generate_references(record)
       end
     end
   end
-  return references
+  return references.dup
 end

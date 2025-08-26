@@ -1,29 +1,23 @@
+require 'open3'
+
 require_relative 'config'
 require_relative 'forms'
 
-def generate_structure(record, mpinput, mpca, subst)
+def generate_structure(record, mpca, subst)
   mpc = "java -cp molpic/target/molpic-1.0-SNAPSHOT.jar net.coderobe.molpic.Cli " + mpca
-  title = mpinput
-  if record["Title"] != nil && record["Title"].length != 0
-    title = record["Title"]
-  end
-  if record["SMILES"] != nil && record["SMILES"].length != 0
-    mpinput = record["SMILES"]
-  end
-  #salts = nil
-  #fullsalts = nil
-  #if record["Salts"] != nil && record["Salts"].length != 0 && record["FullSalts"] != nil && record["FullSalts"].length != 0
-  #  salts = record["Salts"]
-  #  fullsalts = record["FullSalts"]
-  #end
-  #smpcs = []
+  title = record["Title"]
+  title = record["SaltTitle"] if record["SaltTitle"] != nil
+  return record if title == nil
+  return record if record["SMILES"] == nil
+  smiles = record["SMILES"]
+  
   only_subst = false
-
   ENV["DISPLAY"] = ""
   if record["IsSalt"]
     if record["SaltFormula"] != ""
+      smiles = record["SaltSMILES"]
       atoms = ""
-      if record["AmineCount"] > 1
+      if record["SaltAmineCount"] > 1
         for at in 0...record["HeavyAtomCount"]
           if at == 0
             atoms += at.to_s
@@ -31,29 +25,16 @@ def generate_structure(record, mpinput, mpca, subst)
             atoms += ",#{at.to_s}"
           end
         end
-        atoms = " |Sg:n:#{atoms}:#{record["AmineCount"]}:ht|"
+        atoms = " |Sg:n:#{atoms}:#{record["SaltAmineCount"]}:ht|"
       end
-      mpc += " \"#{mpinput}#{atoms}\" -a \"#{record["SaltFormula"]}\" -z \"#{record["AcidCount"]}\"" # -u #{SALTS[salts[sl]][:amine_count]}
+      mpc += " \"#{smiles}#{atoms}\" -a \"#{record["SaltFormula"]}\" -z \"#{record["SaltAcidCount"]}\"" #-u #{record[\"SaltAmineCount\"]}"
     end
   else
-    mpc += " \"#{mpinput}\""
+    mpc += " \"#{record["SMILES"]}\""
   end
 
   if !$options[:c].nil?
     cff = $options[:c] + "/" + Digest::MD5.hexdigest(mpc) + ".svg"
-    #scffs = []
-    #scffc = true
-    #if salts != nil
-    #  for sl in 0...salts.length
-    #    if smpcs[sl] != ""
-    #      scffs[sl] = $options[:c] + "/" + Digest::MD5.hexdigest(smpcs[sl]) + "_" + salts[sl].tr(" ", "_") + ".svg"
-    #      smpcs[sl] += " -o \"#{scffs[sl]}\""
-    #      if !File.exist?(scffs[sl]) || File.size(scffs[sl]) == 0
-    #        scffc = false
-    #      end
-    #    end
-    #  end
-    #end
     cffj = nil
     if subst
       cffj = $options[:c] + "/" + Digest::MD5.hexdigest(mpc) + ".json"
@@ -70,9 +51,6 @@ def generate_structure(record, mpinput, mpca, subst)
           if json_data['ChemicalClasses'] != nil
             record['ChemicalClasses'] = json_data['ChemicalClasses']
           end
-          #if salts.length == 0 || scffc
-          #  return
-          #end
         else
           only_subst = true
           mpc += " -s"
@@ -80,60 +58,21 @@ def generate_structure(record, mpinput, mpca, subst)
       end
     end
     mpc += " -o \"#{cff}\""
-    #if salts != nil
-    #  for sl in 0...salts.length
-    #    if smpcs[sl] != ""
-    #      smpcs[sl] += " -o \"#{scffs[sl]}\""
-    #    end
-    #  end
-    #end
   else
     mpc += " -o \"structure/#{title.downcase.tr(" ", "_")}.svg\""
-    #if salts != nil
-    #  for sl in 0...salts.length
-    #    smpcs[sl] += " -o \"structure/#{fullsalts[sl].downcase.tr(" ", "_")}.svg\""
-    #  end
-    #end
     mpc += " -j \"#{vars_file}\""
   end
+
+  puts "#{mpc}" if !$options[:v].nil?
   ret = system(mpc)
 
   if !ret
-    puts "#{mpc}"
-    return
+    return record
   end
-  #if salts != nil
-  #  for sl in 0...salts.length
-  #    if smpcs[sl] != ""
-  #      if $options[:v]
-  #        puts "Exec: " + smpcs[sl]
-  #      end
-  #      ret = system(smpcs[sl])
-  #      if !ret
-  #        #puts "#{smpcs[sl]}"
-  #        return
-  #      end
-  #    end
-  #  end
-  #end
-
-  json_file = nil
+  svg_file = File.read(cff) if cff != nil
+  json_file = File.read(cffj) if cffj != nil
   if !$options[:c].nil?
     FileUtils.cp(cff, "structure/#{title.downcase.gsub(/\s+/, '_')}.svg")
-    #if salts != nil
-    #  for sl in 0...salts.length
-    #    if smpcs[sl] != ""
-    #      FileUtils.cp(scffs[sl], "structure/#{fullsalts[sl].downcase.tr(" ", "_")}.svg")
-    #    end
-    #  end
-    #end
-    if cffj != nil
-      json_file = File.read(cffj)
-    end
-  else
-    if cffj != nil
-      json_file = File.read(vars_file)
-    end
   end
   if subst && json_file != nil
     json_data = JSON.parse(json_file)
@@ -144,7 +83,11 @@ def generate_structure(record, mpinput, mpca, subst)
       record['ChemicalClasses'] += json_data['ChemicalClasses']
     end
   end
+  #puts svg_file
   log = "Generating Structure: #{title.downcase.gsub(/\s+/, '_')}.svg"
+  formated = svg_with_white_background(svg_file)
+  optimized = optimize_svg(formated)
+  record["Structure"] = optimized
   if subst
     log += " (Substitutions:"
     record['ChemicalClasses'] = record['ChemicalClasses'].uniq
@@ -161,12 +104,5 @@ def generate_structure(record, mpinput, mpca, subst)
     end
     log += ")"
   end
-  puts log
-  #if salts != nil
-  #  for sl in 0...salts.length
-  #    if smpcs[sl] != ""
-  #      puts "Generated Structure: #{fullsalts[sl].downcase.tr(" ", "_")}.svg"
-  #    end
-  #  end
-  #end
+  return record
 end

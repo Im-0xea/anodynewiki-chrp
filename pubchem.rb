@@ -13,12 +13,13 @@ PUG_REST = PUBCHEM_URL + "rest/pug"
 PUG_VIEW = PUBCHEM_URL + "rest/pug_view"
 
 REST_PROPS = [ "Title", "MolecularFormula", "MolecularWeight", "SMILES", "InChI", "InChIKey", "IUPACName", "XLogP", "HeavyAtomCount" ]
-MAX_SYMS = 10
+MAX_SYMS = 25
 VIEW_PROPS = [
   "CAS", "European Community (EC) Number", "UNII", "DrugBank ID", "DSSTox Substance ID", "HMDB ID", "KEGG ID", "Wikidata", "Wikipedia",
   "Physical Description", "Color/Form", "Odor", "Taste", "Density", "Melting Point", "Boiling Point", "Flash Point",
   "Solubility", "Stability/Shelf Life", "Decomposition", "pH",
-  "Human Drugs", "Drug Indication", "Drug Classes", "Clinical Trials", "Therapeutic Uses", "Drug Warnings", "Reported Fatal Dose",
+  "Human Drugs", "Drug Indication", "Drug Classes", "Clinical Trials", "Therapeutic Uses",
+  "Drug Warnings", "Reported Fatal Dose", "Toxicity", "Toxicity Data", "Human Toxicity Values", "Non-Human Toxicity Values", "Ecotoxicity Values", "Health Effects", "Adverse Effects", "Acute Effects", "Treatment", "Interactions", "Associated Disorders and Diseases", "Interactions and Pathways",
   #"Chemical Classes"
   "Pharmacodynamics",
   "MeSH Pharmacological Classification", "FDA Pharmacological Classification", "Pharmacological Classes", "ATC Code",
@@ -28,7 +29,7 @@ VIEW_PROPS = [
   #"Impurities",
 ]
 VIEW_A_PROPS = [
-  "Record Description",
+  #"Record Description",
 ]
 
 #def generate_substitutions()
@@ -101,22 +102,11 @@ def recurse_section(record, compound, json_obj)
   end
 
   if json_obj["Section"] != nil
-    tmp_unii = nil
-    if record["UNII"] != nil
-      tmp_unii = record["UNII"]
-    end
+    #if record["UNII"] != nil
+      #record["UNII"] += [ record["UNII"].delete_prefix("UNII-") ]
+    #end
     json_obj["Section"].each do |section|
       recurse_section(record, compound, section)
-    end
-    if tmp_unii != record["UNII"] && record["UNII"] != nil && tmp_unii != nil
-
-      if record["StoreUNII"] == nil
-        record["StoreUNII"] = [ tmp_unii, record["UNII"] ]
-      else
-        if !record["StoreUNII"].include?(record["UNII"])
-          record["StoreUNII"] += [ record["UNII"] ]
-        end
-      end
     end
   end
 end
@@ -132,7 +122,7 @@ def query_pubchem(prev_record, title, compound, stereoisomer)
 
   #client = PubChemAPI::Client.new
   #begin
-  #  compound = client.get_compound_by_name($compound, 'record')
+  #  compound = client.get_compound_by_name(compound, 'record')
   #  record["PubChemId"] = compound.cid
   #  record["IUPACName"] = compound.iupac_name
   #  record["MolecularFormula"] = compound.molecular_formula
@@ -147,6 +137,8 @@ def query_pubchem(prev_record, title, compound, stereoisomer)
 
   if compound.start_with?("CID")
     url = PUG_REST + "/compound/cid/#{compound[3..-1]}/property/"
+  elsif record["PubChemId"] != nil
+    url = PUG_REST + "/compound/cid/#{record["PubChemId"]}/property/"
   else
     url = PUG_REST + "/compound/name/#{replace_symbols(compound)}/property/"
   end
@@ -158,20 +150,26 @@ def query_pubchem(prev_record, title, compound, stereoisomer)
   end
   url += "/JSON"
   
-  json_content = fetch(url, "application/json")
+  json_content = fetch(url, "")
   if json_content == nil
     if !stereoisomer
       puts "failed to query: #{compound}"
     end
     return record
   end
-  json_props = JSON.parse(json_content)
-  properties = json_props["PropertyTable"]["Properties"][0]
-  for prop in REST_PROPS
-    record[prop] = properties[prop]
+  if !json_content.include?("xml")
+    json_props = JSON.parse(json_content)
+    if !json_props["Fault"]
+      properties = json_props["PropertyTable"]["Properties"][0]
+      for prop in REST_PROPS
+        record[prop] = properties[prop]
+      end
+      record["PubChemId"] = properties["CID"]
+      record["Title"] = title
+    end
   end
-  record["PubChemId"] = properties["CID"]
-  record["Title"] = title
+
+  return record if !record['PubChemId']
 
   url = PUG_VIEW + "/data/compound/#{record['PubChemId']}/JSON"
   json_syms = JSON.parse(fetch(url, "application/json"))
@@ -180,19 +178,19 @@ def query_pubchem(prev_record, title, compound, stereoisomer)
     recurse_section(record, compound, section)
   end
 
-  url = PUG_REST + "/compound/cid/#{record['PubChemId']}/description/JSON"
-  json_syms = JSON.parse(fetch(url, "application/json"))
-  infos = json_syms["InformationList"]["Information"]
+  #url = PUG_REST + "/compound/cid/#{record['PubChemId']}/description/JSON"
+  #json_syms = JSON.parse(fetch(url, "application/json"))
+  #infos = json_syms["InformationList"]["Information"]
   #if record["Record Description"] != nil
   #  record["Record Description"] = [ record["Record Description"] ]
   #else
   #  record["Record Description"] = []
   #end
-  for info in infos
-    if info["Description"] != nil
-      record["Record Description"] += [ info["Description"] ]
-    end
-  end
+  #for info in infos
+  #  if info["Description"] != nil
+  #    #record["Record Description"] += [ info["Description"] ]
+  #  end
+  #end
 
   if record["MolecularFormula"] != nil
     record["MolecularFormula"] = html_formula(record["MolecularFormula"])
@@ -249,10 +247,9 @@ def query_pubchem(prev_record, title, compound, stereoisomer)
   if json_fetch != nil && json_fetch.length != 0
     json_syms = JSON.parse(json_fetch)
     synonyms = json_syms["InformationList"]["Information"][0]["Synonym"].uniq
-    unwanted_synonyms = [ record["Title"], record["Title"].upcase, record["Title"].downcase, "#{record["Title"].capitalize()}, DL-", record["CAS"], record["InChIKey"].capitalize(), record["IUPACName"], record["DSSTox Substance ID"], record["Wikidata"], record["UNII"], record["Abbreviation"] ] # record["ChemicalClasses"][0]
-    strip_prefixes = [ "dl-", "DL-", "Dl-", "(+/-)", "(+-)", "(-)-",
-      "U.S.P. "
-    ]
+    unwanted_synonyms = [ record["Title"], record["Title"].upcase, record["Title"].downcase, "#{record["Title"].capitalize()}, DL-", record["CAS"], record["InChIKey"].capitalize(), record["IUPACName"], record["DSSTox Substance ID"], record["Wikidata"], record["Abbreviation"] ] # record["ChemicalClasses"][0]
+    unwanted_synonyms += [ record["UNII"] ] if record["UNII"] != nil
+    strip_prefixes = [ "U.S.P." ]
     strip_postfixes = [
       "[WHO-DD]",
       "[USAN]",
@@ -263,6 +260,7 @@ def query_pubchem(prev_record, title, compound, stereoisomer)
       "(base)",
       "[HSDB]",
       " HCL",
+      " HCl",
       " free acid",
       ", Anhydrous",
       " (pharmaceutical)",
@@ -290,6 +288,22 @@ def query_pubchem(prev_record, title, compound, stereoisomer)
     filtSynonyms = []
     filtSynonyms[0] = record["Title"]
     filtSynonyms += synonyms
+    if !stereoisomer
+      chiral_strip_prefixes = [ "dl-", "DL-", "Dl-", "(+/-)-", "(+-)-", "(-)-", "(+)-" ]
+      CHIRAL_PREFIXES.each do |key, value|
+        chiral_strip_prefixes += value[:prefixes] if value[:prefixes] != nil
+      end
+      chiral_strip_prefixes.uniq
+      for strip in chiral_strip_prefixes
+        filtSynonyms = filtSynonyms.map { |str| str.sub(/^#{Regexp.escape(strip)}/, "") }
+      end
+
+      chiral_strip_postfixes = [ ", DL-", ", (R)-", ", (-)-", ",(-)" ]
+      chiral_strip_postfixes.uniq
+      for strip in chiral_strip_postfixes
+        filtSynonyms = filtSynonyms.map { |str| str.sub(/#{Regexp.escape(strip)}$/, "") }
+      end
+    end
     for strip in strip_prefixes
       filtSynonyms = filtSynonyms.map { |str| str.sub(/^#{Regexp.escape(strip)}/, "") }
     end
@@ -301,15 +315,11 @@ def query_pubchem(prev_record, title, compound, stereoisomer)
     uniiSyms = filtSynonyms.select { |str| str.start_with?("UNII") }
     if uniiSyms.length != 0
       new_unii = uniiSyms[0].delete_prefix("UNII").delete_prefix("-")
-      if record["UNII"] == nil
-        record["UNII"] = new_unii
-      end
-      if record["StoreUNII"] == nil
-        record["StoreUNII"] = []
-      end
-      if !record["StoreUNII"].include?(new_unii)
-        record["StoreUNII"] += [ new_unii ]
-      end
+      #if record["UNII"] == nil
+      #  record["UNII"] = [ new_unii ]
+      #elsif !record["UNII"].include?(new_unii)
+      #  record["UNII"] += [ new_unii ]
+      #end
       filtSynonyms = filtSynonyms.reject { |str| str.start_with?("UNII") }
     end
     chemblSyms = filtSynonyms.select { |str| str.start_with?("CHEMBL") }
@@ -336,9 +346,6 @@ def query_pubchem(prev_record, title, compound, stereoisomer)
           #end
           #record["Stereoisomers"] += [ aminoSt ]
         end
-      end
-      if !stereoisomer
-        filtSynonyms = filtSynonyms.reject { |str| str.start_with?("D-") || str.start_with?("L-") || str.start_with?("DL-") }
       end
     end
     # safe UNII Id and make ref
@@ -380,10 +387,10 @@ def query_pubchem(prev_record, title, compound, stereoisomer)
     filtSynonyms = filtSynonyms.map { |str| str.rstrip }
     filtSynonyms = filtSynonyms.map { |str| str.gsub(/\s\[[^\]]+\]$/, '') }
     filtSynonyms = filtSynonyms.map { |str| str.gsub(/\s\([^\)]+\)$/, '') }
-    filtSynonyms = filtSynonyms.uniq
     if filtSynonyms[0] != nil
       record["Title"] = filtSynonyms[0]
     end
+    filtSynonyms = filtSynonyms.uniq
     filtSynonyms = filtSynonyms - unwanted_synonyms
 
     # [Street Name] (Street Name)
@@ -393,6 +400,87 @@ def query_pubchem(prev_record, title, compound, stereoisomer)
     # ChemDiv1_018926
     # CBMicro_005622
     record["Aliases"] = filtSynonyms[0, MAX_SYMS]
+  end
+
+  #if record["Toxicity Data"]
+  #  record["Toxicity Data"].split("\n").each do |tox|
+  #    puts tox
+  #    if tox.start_with?("LD50:")
+  #      ttox = tox.delete_prefix("LD50:").delete_suffix("(T14)").downcase.gsub("(", "").gsub(", ", " - ").gsub(")", "").strip
+  #      record["LD50"] = [] if record["LD50"] == nil
+  #      record["LD50"] << ttox
+  #    end
+  #  end
+  #end
+  url = "https://pubchem.ncbi.nlm.nih.gov/sdq/sdqagent.cgi?infmt=json&outfmt=json&query={\"download\":\"*\",\"collection\":\"chemidplus\",\"order\":[\"relevancescore,desc\"],\"start\":1,\"limit\":100,\"where\":{\"ands\":[{\"cid\":\"#{record['PubChemId']}\"}]}}"
+  tox_syms = JSON.parse(fetch(url, "application/json"))
+  if tox_syms
+    puts "Toxicity Tests:"
+    for test in 0...tox_syms.length
+      next if tox_syms[test]["cid"] != record["PubChemId"].to_s
+      next if tox_syms[test]["route"] == "unreported"
+      organism = tox_syms[test]["organism"].capitalize.gsub("Infant", "Human - infant").gsub("Child", "Human - child").gsub("Man", "Human - male").gsub("Women", "Human - female")
+      dosage = { route: tox_syms[test]["route"], amount: tox_syms[test]["dose"].gsub("ug/kg", "μg/kg").gsub("uL/kg", "μL/kg") }
+      for type in ["LD50", "LC50", "LDLo", "TDLo"]
+        if tox_syms[test]["testtype"] == type
+          record[type] = [] if record[type] == nil
+          entry = record[type].find { |h| h[:organism] == organism }
+          if entry != nil
+            entry[:dosages] << dosage
+          else
+              record[type] << { organism: organism, dosages: [ dosage ] }
+          end
+          break
+        end
+      end
+      #elsif tox_syms[test]["testtype"] == "LDLo"
+      #  record["LDLo"] = [] if record["LDLo"] == nil
+      #  entry = record["LDLo"].find { |h| h[:organism] == organism }
+      #  if entry != nil
+      #    entry[:dosages] << dosage
+      #  else
+      #      record["LDLo"] << { organism: organism, dosages: [ dosage ] }
+      #  end
+      #elsif tox_syms[test]["testtype"] == "TDLo"
+      #  record["TDLo"] = [] if record["TDLo"] == nil
+      #  entry = record["TDLo"].find { |h| h[:organism] == organism }
+      #  if entry != nil
+      #    entry[:dosages] << dosage
+      #  else
+      #      record["TDLo"] << { organism: organism, dosages: [ dosage ] }
+      #  end
+      #end
+      #puts "#{tox_syms[test]["testtype"]}: #{tox_syms[test]["dose"]}"
+    end
+    #for type in ["LD50", "LC50", "LDLo", "TDLo"]
+    #  if record[type]
+    #    record["Sum#{type}"] = ""
+    #    for org in record[type] 
+    #      record["Sum#{type}"] += "<strong>#{org[:organism].capitalize}:</strong><br>"
+    #      for dose in org[:dosages]
+    #        record["Sum#{type}"] += "<strong>- #{dose[:route]}</strong>: #{dose[:amount]}<br>"
+    #      end
+    #    end
+    #  end
+    #end
+    #if record["LDLo"]
+    #  record["SumLDLo"] = ""
+    #  for org in record["LDLo"] 
+    #    record["SumLDLo"] += "<strong>#{org[:organism].capitalize}:</strong><br>"
+    #    for dose in org[:dosages]
+    #      record["SumLDLo"] += "<strong>- #{dose[:route]}</strong>: #{dose[:amount]}<br>"
+    #    end
+    #  end
+    #end
+    #if record["TDLo"]
+    #  record["SumTDLo"] = ""
+    #  for org in record["TDLo"] 
+    #    record["SumTDLo"] += "<strong>#{org[:organism].capitalize}:</strong><br>"
+    #    for dose in org[:dosages]
+    #      record["SumTDLo"] += "<strong>- #{dose[:route]}</strong>: #{dose[:amount]}<br>"
+    #    end
+    #  end
+    #end
   end
 
   if record["Refs"] == nil

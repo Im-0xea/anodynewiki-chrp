@@ -351,7 +351,7 @@ def query_wikipedia(prev_record)
   else
     record = prev_record
   end
-  t_compound = $title
+  t_compound = record["Title"]
   if record["Wikipedia"] != nil
     t_compound = record["Wikipedia"]
   end
@@ -386,6 +386,7 @@ def query_wikipedia(prev_record)
   wikitext.gsub!("{{Citation needed}}", "")
   wikitext.gsub!("{{nbsp}}", " ")
   wikitext.gsub!("{{nbsp}}", " ")
+  wikitext.gsub!("{{cascite|correct|??}}", "")
   wikitext.gsub!("<\/ref>", "")
   wikitext.gsub!(/<ref[^>]*>/m, "")
   wikitext.gsub!(/<ref *\/>/m, "")
@@ -398,6 +399,8 @@ def query_wikipedia(prev_record)
   wikitext.gsub!(/\r\n?/, "\n")
   wikitext.gsub!("[[", "")
   wikitext.gsub!("]]", "")
+  wikitext.gsub!(/\{\{citation needed\|.+?\}\}/m, "")
+  wikitext.gsub!(/\{\{Citation needed\|.+?\}\}/m, "")
   wikitext.gsub!(/\{\{ubl.+?\}\}/m, "")
   wikitext.gsub!(/\{\{Better source needed.*?\}\}/i, '')
   wikitext.gsub!(/\{\{Additional citation needed.*?\}\}/i, '')
@@ -427,6 +430,8 @@ def query_wikipedia(prev_record)
     unit += "s" unless unit.end_with?("s") || start == finish
     "#{start}–#{finish} #{unit}"
   end
+  wikitext.gsub!("{{", "")
+  wikitext.gsub!("}}", "")
   infobox = extract_infobox(wikitext)
   if infobox == nil
     return record
@@ -466,6 +471,7 @@ def query_wikipedia(prev_record)
     record["EliminationHalfLife"].gsub!(" to ", " - ")
     record["EliminationHalfLife"].gsub!(/(\d+(?:\.\d+)?)[\-\u2013\u2014](\d+(?:\.\d+)?)/, '\1 – \2')
     record["EliminationHalfLife"].gsub!("Up - ", "")
+    record["EliminationHalfLife"].gsub!("{{cascite|correct|??}}", "")
   end
   if record["DurationOfAction"]
     record["DurationOfAction"].gsub!("hrs", "hours")
